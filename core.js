@@ -16,6 +16,7 @@ async function loadAndParseDOM(absPath = 'dist/index.html') {
     const $dom = cheerio.load(domString)
     await processJS($dom, context)
     await processLink($dom, context)
+    await processIMG($dom, context)
     fs.writeFileSync(path.resolve(path.join(dirPath, 'single.html')), $dom.html())
 }
 
@@ -52,10 +53,24 @@ async function file2base64(absPath) {
         base64String = buffer.toString('base64')
     }
     // console.log(path.extname(absPath))
-    if (path.extname(absPath) === '.ico') {
+    const ext = path.extname(absPath).toLowerCase()
+    if (ext === '.ico') {
         base64String = 'data:image/x-icon;base64,' + base64String
         return base64String
     }
+    if (ext === '.jpg' || ext === '.jpeg') {
+        base64String = 'data:image/jpg;base64,' + base64String
+        return base64String
+    }
+    if (ext === '.png') {
+        base64String = 'data:image/png;base64,' + base64String
+        return base64String
+    }
+    if (ext === '.bmp') {
+        base64String = 'data:image/bmp;base64,' + base64String
+        return base64String
+    }
+    return 'file type not supported yet !!!'
 }
 
 async function processJS($dom, context) {
@@ -77,6 +92,25 @@ async function processJS($dom, context) {
             $script.text(text)
             $script.removeAttr('src')
         }
+    }
+}
+
+async function processIMG($dom, context) {
+    const imgs = $dom('img')
+    const imgList = []
+    imgs.each(function(index, element) {
+        const $img = $dom(element)
+        imgList.push($img)
+    })
+    for (let $img of imgList) {
+        let src = $img.attr('src')
+        if (!src) continue
+
+        if (!src.startsWith('http')) {
+            src = path.resolve(path.join(context.dirPath, src))
+        }
+        const text = await file2base64(src)
+        $img.attr('src', text)
     }
 }
 
