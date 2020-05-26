@@ -5,19 +5,18 @@ const jsdom = require('jsdom')
 const request = require('request')
 const util = require('util')
 
-async function loadAndParseDOM(absPath = 'dist/index.html') {
+let $dom = null
+let context = null
+
+async function initDOMAndContext(absPath = 'dist/index.html') {
     const dirPath = path.dirname(path.resolve(absPath))
-    const context = {
+    context = {
         htmlPath: path.resolve(absPath),
         dirPath: dirPath
     }
     // console.log(context)
     const domString = fs.readFileSync(absPath)
-    const $dom = cheerio.load(domString)
-    await processJS($dom, context)
-    await processLink($dom, context)
-    await processIMG($dom, context)
-    fs.writeFileSync(path.resolve(path.join(dirPath, 'single.html')), $dom.html())
+    $dom = cheerio.load(domString)
 }
 
 async function getBody(url) {
@@ -70,6 +69,10 @@ async function file2base64(absPath) {
         base64String = 'data:image/bmp;base64,' + base64String
         return base64String
     }
+    if (ext === '.pdf') {
+        base64String = 'data:application/pdf;base64, ' + base64String
+        return base64String
+    }
     return 'file type not supported yet !!!'
 }
 
@@ -114,6 +117,19 @@ async function processIMG($dom, context) {
     }
 }
 
+async function processElements(selector, handler) {
+    const elements = $dom(selector)
+    const elementList = []
+    elements.each(function(index, element) {
+        const $element = $dom(element)
+        elementList.push($element)
+    })
+    console.log(`number of ${selector} elements: ${elementList.length}`)
+    for (let $element of elementList) {
+        await handler($element)
+    }
+}
+
 async function processLink($dom, context) {
     const links = $dom('link')
     const linkList = []
@@ -147,4 +163,18 @@ async function processLink($dom, context) {
     }
 }
 
-loadAndParseDOM()
+
+;(async function() {
+    await initDOMAndContext('dist1/index.html')
+    // await processJS($dom, context)
+    // await processLink($dom, context)
+    // await processIMG($dom, context)
+    await processElements('a', async function($element) {
+        const href = $element.attr('href')
+        console.log(href)
+        if (href.endsWith('.pdf') && !href.startsWith('http')) {
+            $element.attr('href', file2base64(path.resolve(path.join(context.dirPath, href))))
+        }
+    })
+    fs.writeFileSync(path.resolve(path.join(context.dirPath, 'single.html')), $dom.html())
+})()
